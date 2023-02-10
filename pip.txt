@@ -1,0 +1,12 @@
+torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
+pandas
+scipy
+scikit-learn
+PyWavelets
+statsmodels
+tqdm
+func-timeout
+mlflow
+jupyter
+natsort
+plotly-express
