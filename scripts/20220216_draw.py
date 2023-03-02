@@ -19,25 +19,16 @@ items = [
     # ("corr >= 0.4", "/mnt/cloud/20220201_experiments/model=LSTM,layers=2,forecast=10,input_length=170,dataset=Formica_04"),
 ]
 
-_ds = ds.DatasetInputData.create("husky")
+_ds = ds.DatasetInputData.create(ds.Datasets.CoBot202210)
 # chan = f"dump_from_simulation_{i}"
-chan = f"111"
+chan = f"test"
 name, cols, data = _ds.channel(chan)
 
-data = data[30:, 0]
-
+mpc = data[:, 0]
+weight = data[:, 75] + data[:, 76] + data[:, 77] + data[:, 78]
 
 plotdata = dict()
 plotdata["actual signal"] = data
-
-for setname, item in items:
-    # if setname == "all features":
-    #     preds = np.load(os.path.join(item, "_test_dump_from_simulation_5", f"{chan}_predictions.npy"))
-    # else:
-    preds = np.load(os.path.join(item, "_test", f"{chan}_predictions.npy"))
-    plotdata[setname] = preds
-
-import matplotlib
 
 from matplotlib import pyplot as plt
 # matplotlib.rcParams['mathtext.fontset'] = 'cm'
@@ -50,27 +41,32 @@ from matplotlib import pyplot as plt
 
 
 
-plt.plot(plotdata["actual signal"], color="red", label="actual signal")
-plt.plot(plotdata["all features"], color="green", label="all features", linestyle='dashed', )
-plt.plot(plotdata["corr >= 0.1"], color="blue", label="corr >= 0.1", linestyle='dashed', )
-plt.plot(plotdata["corr >= 0.4"], color="fuchsia", label="corr >= 0.4", linestyle='dashed', )
+# plt.plot(plotdata["actual signal"], color="red", label="actual signal")
+# plt.plot(plotdata["all features"], color="green", label="all features", linestyle='dashed', )
+# plt.plot(plotdata["corr >= 0.1"], color="blue", label="corr >= 0.1", linestyle='dashed', )
+# plt.plot(plotdata["corr >= 0.4"], color="fuchsia", label="corr >= 0.4", linestyle='dashed', )
+# ax1 = plt.subplot()
+# plt.legend()
+# plt.plot(mpc, 'b')
+# plt.xlabel("t [s]")
+# plt.ylabel("momentary power consumption [W]", color='b')
+#
+# ax2 = ax1.twinx()
+# plt.plot(weight, '--r')  # solid green
+# plt.ylabel("payload weight [kg]", color='r')
+#
+# plt.show()
+
+
+
+lstm = np.load("c:/experiments/cobot_2023_weighted_multivariate_with_MPC/model=LSTM,layers=2,forecast=10,input_length=5,dataset=CoBot202210/_test_train/test_predictions.npy")
+# scinet = np.load("c:/experiments/cobot_2023_weighted_multivariate_with_MPC/model=SCINet,forecast=10,input_length=64,dataset=CoBot202210/_test_train/test_predictions.npy")
+
+
+plt.plot(mpc, 'b', label="actual mpc")
+plt.plot(lstm, 'r', label="LSTM predictions")
+# plt.plot(scinet, 'g', label="SCINet predictions")
 plt.legend()
-# plt.plot(x, x + 0, '')  # solid green
-# plt.plot(x, x + 1, '--c') # dashed cyan
-# plt.plot(x, x + 2, '-.k') # dashdot black
-# plt.plot(x, x + 3, ':r');  # dotted red
-
-plt.xlabel("sequence index")
-plt.ylabel("power consumption (standarized)")
+plt.xlabel("t [s]")
+plt.ylabel("momentary power consumption [W]")
 plt.show()
-
-# fig = px.line(pd.DataFrame(plotdata),
-#               labels={
-#                   "index": "sequence index",
-#                   "value": "power consumption"
-#               },
-#               color_discrete_sequence=["red", "green", "blue", "fuchsia"]
-#               )
-# fig.show()
-# fig.write_html(f"/home/pawel/Downloads/formica_forecasts.html")
-

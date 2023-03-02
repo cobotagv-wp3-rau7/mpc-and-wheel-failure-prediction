@@ -1,0 +1,12 @@
+md5: dd44b78ae2ecd1a978b170962226c6b9
+frozen: true
+deps:
+- path: time_series/anomaly_detection/TUM_csv
+  repo:
+    url: git@git.kplabs.pl:ml/data_registry.git
+    rev_lock: b65518b0fa6a4e7d1a629348798c6f4a65237f90
+outs:
+- md5: 717a35363cabd539edef35a6d37f1b6d.dir
+  size: 134741842
+  nfiles: 27
+  path: TUM_csv

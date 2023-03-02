@@ -1,0 +1,13 @@
+md5: c925f510d48d20205f67ab9711c4dd8b
+locked: true
+deps:
+- path: time_series/anomaly_detection/NAB
+  repo:
+    url: git@git.kplabs.pl:ml/data_registry.git
+    rev_lock: 1df4104f4587c96e788ab1c89f8ce90e81d3b66e
+outs:
+- md5: 6b008da260c6f2ad801ce55cb12c5e5b.dir
+  path: NAB_original
+  cache: true
+  metric: false
+  persist: false

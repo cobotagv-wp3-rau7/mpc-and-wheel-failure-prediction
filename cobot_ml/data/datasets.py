@@ -319,6 +319,8 @@ class Datasets:
     Husky_02 = "Husky_02"
     Husky_04 = "Husky_04"
 
+    CoBot202210 = "CoBot202210"
+
 
 class Formica_005(Formica20220104):
     def columns(self):
@@ -533,6 +535,7 @@ class IEEEBattery_04(IEEEBattery):
 
 base_path_datasets_ = "c:\\datasets\\"
 
+
 DatasetInputData.implementations[Datasets.EagleOne] = (EagleOne, os.path.join(base_path_datasets_, "cobot1"))
 DatasetInputData.implementations[Datasets.Formica20220104] = (
     Formica20220104, os.path.join(base_path_datasets_, "cobot2"))
@@ -558,10 +561,84 @@ DatasetInputData.implementations[Datasets.Husky_02] = (Husky_02, os.path.join(ba
 DatasetInputData.implementations[Datasets.Husky_04] = (Husky_04, os.path.join(base_path_datasets_, "husky", "trials"))
 
 
-class CoBot202208(DatasetInputData):
-    COLUMNS = []
-    def __init__(self, path: str, kwargs):
+class CoBot202210Data(DatasetInputData):
+    MPC_COLUMN = "FH.6000.[ENS] - Energy Signals.Momentary power consumption"
+
+    @staticmethod
+    def _add_computed_columns(input_data):
+        input_data["[COMPUTED] - DRIVE ACC L"] = input_data["FH.6000.[G1LDS] GROUP 1 - LEFT DRIVE SIGNALS.ActualSpeed_L"].diff().fillna(0)
+        input_data["[COMPUTED] - DRIVE ACC R"] = input_data["FH.6000.[G2RDS] GROUP 2 - RIGHT DRIVE SIGNALS.ActualSpeed_R"].diff().fillna(0)
+        input_data["[COMPUTED] - Natural Navigation ACC"] = input_data["FH.6000.[NNS] - Natural Navigation Signals.Speed"].diff().fillna(0)
+        input_data["[COMPUTED] - Odometry SPEED L"] = input_data["FH.6000.[ODS] - Odometry Signals.Cumulative distance left"].diff().fillna(0)
+        input_data["[COMPUTED] - Odometry SPEED R"] = input_data["FH.6000.[ODS] - Odometry Signals.Cumulative distance right"].diff().fillna(0)
+        return input_data
+
+    def __init__(self, path, kwargs):
         self.path = path
+        with open(os.path.join(self.path, "metadata.json")) as f:
+            self.metadata = json.load(f)
+        self.columns = [k for k, v in self.metadata.items() if k != "timestamp"]
+        self.columns.remove(CoBot202210Data.MPC_COLUMN)
+        self.columns.insert(0, CoBot202210Data.MPC_COLUMN)
+
+        self.run_1 = self._add_computed_columns(pd.read_csv(os.path.join(self.path, "data_1.csv")))[self.columns]
+        self.run_2_3_4 = self._add_computed_columns(pd.read_csv(os.path.join(self.path, "data_2_3_4.csv")))[self.columns]
+        self.run_5_6 = self._add_computed_columns(pd.read_csv(os.path.join(self.path, "data_5_6.csv")))[self.columns]
+
+        all_the_data = pd.concat([self.run_1, self.run_2_3_4, self.run_5_6])
+        self.mpc_correlations = all_the_data.corr().iloc[0, :]
+        self._minmax = dict()
+        for c in self.columns:
+            md = self.metadata[c]
+            if md["type"] != "bool":
+                self._minmax[c] = (all_the_data[c].min(), all_the_data[c].max())
+
+        run1_len = len(self.run_1)
+        self.train_data = pd.concat([self.run_1.iloc[:int(0.8 * run1_len), :], self.run_2_3_4], ignore_index=True)
+        self.test_data = pd.concat([self.run_1.iloc[int(0.8 * run1_len):, :], self.run_5_6], ignore_index=True)
+
+        # self.standardize()
+        self.minmax(weighted=True)
+
+        print(f"Loaded Cobot202210: len(train)={len(self.train_data)}, len(test)={len(self.test_data)}")
+
+    def minmax(self, weighted: bool = False):
+        for c in self.columns:
+            md = self.metadata[c]
+            if md["type"] != "bool":
+                if weighted:
+                    corr = abs(self.mpc_correlations.loc[c])
+                else:
+                    corr = 1.0
+                _min = self._minmax[c][0]
+                _max = self._minmax[c][1]
+                if (_max - _min) > 0:
+                    self.train_data[c] = (self.train_data[c] - _min) / (_max - _min) * corr
+                    self.test_data[c] = (self.test_data[c] - _min) / (_max - _min) * corr
+                else:
+                    self.train_data[c] = 0.5 * corr
+                    self.test_data[c] = 0.5 * corr
+
+    def standardize(self):
+        for c in self.columns:
+            md = self.metadata[c]
+            if md["type"] != "bool":
+                self.train_data[c] = (self.train_data[c] - md["mean"]) / md["std"]
+                self.test_data[c] = (self.test_data[c] - md["mean"]) / md["std"]
+
+    def channel_names(self):
+        return ["train", "test"]
+
+    def channel(self, channel_name):
+        if channel_name == "train":
+            return channel_name, self.columns, self.train_data.to_numpy()
+        elif channel_name == "test":
+            return channel_name, self.columns, self.test_data.to_numpy()
+        else:
+            raise f"Invalid channel name {channel_name}"
+
+
+DatasetInputData.implementations[Datasets.CoBot202210] = (CoBot202210Data, "c:\\datasets\\cobot_newest\\10\\")
 
 
 class FormicaNew(DatasetInputData):
@@ -662,7 +739,7 @@ if __name__ == "!!__main__":
     all_data.to_csv(os.path.join(base, "data_5_6.csv"), index=None)
     exit()
 
-if __name__ == "__main__":
+if __name__ == "!!!__main__":
 
     def columns_present_everywhere_and_changing(path):
         files = _files_as_pattern(path, "data*.csv")

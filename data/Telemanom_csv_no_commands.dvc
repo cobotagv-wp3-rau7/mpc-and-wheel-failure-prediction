@@ -1,0 +1,12 @@
+md5: 99417358705e4da9afeb9a364ab7e29f
+frozen: true
+deps:
+- path: time_series/anomaly_detection/Telemanom_csv_no_commands
+  repo:
+    url: git@git.kplabs.pl:ml/data_registry.git
+    rev_lock: c254ed4edadbab99a6905bba18e04623326791ec
+outs:
+- md5: 05073ae5ff53071634d6f58de1c02b59.dir
+  size: 12439726
+  nfiles: 164
+  path: Telemanom_csv_no_commands

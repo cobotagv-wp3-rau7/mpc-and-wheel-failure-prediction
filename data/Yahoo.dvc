@@ -1,0 +1,12 @@
+md5: fd9a077300308de0c6432fbe85f4d7a0
+frozen: true
+deps:
+- path: time_series/anomaly_detection/Yahoo
+  repo:
+    url: git@git.kplabs.pl:ml/data_registry.git
+    rev_lock: c37f1b00d20720b521bb96608e04e2ae2fe3006b
+outs:
+- md5: 800941eef6b959ccd8e57f0ec6541515.dir
+  size: 47919556
+  nfiles: 372
+  path: Yahoo

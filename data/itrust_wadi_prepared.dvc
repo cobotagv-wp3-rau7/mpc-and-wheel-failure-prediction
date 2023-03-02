@@ -1,0 +1,14 @@
+md5: f62dd95c2b6f530ada31903bf24975b3
+cmd: python scripts/iTrust/prepare_wadi.py
+wdir: ..
+deps:
+- md5: 18e79f207923839f3379d8079a2c4505.dir
+  path: data/itrust/wadi
+- md5: 8d235df59a0d5259ba959265e85d44e7
+  path: scripts/iTrust/prepare_wadi.py
+outs:
+- md5: b207103d8d2f56e01caa2169a460f557.dir
+  path: data/wadi_prepared
+  cache: true
+  metric: false
+  persist: false

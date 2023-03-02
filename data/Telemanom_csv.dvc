@@ -1,0 +1,11 @@
+md5: 09ea5f43285ccce550135e7a21d894f3
+cmd: python scripts/convert_telemanom_to_csv.py
+wdir: ..
+deps:
+- md5: 51c617891a8113a0eae87f283998b50f.dir
+  path: data/Telemanom
+- md5: 8400f587d60b5b09ebc14323ccfaf381
+  path: scripts/convert_telemanom_to_csv.py
+outs:
+- md5: f770edd1ba64f3b32761012a04a8915c.dir
+  path: data/Telemanom_csv

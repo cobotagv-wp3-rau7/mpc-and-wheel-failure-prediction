@@ -1,0 +1,13 @@
+md5: 7e51a8ba30ea016a50e3272e51b538b0
+locked: true
+deps:
+- path: time_series/anomaly_detection/Telemanom
+  repo:
+    url: git@git.kplabs.pl:ml/data_registry.git
+    rev_lock: 225e60fc8554f3a57e42b111548b76e197eb6047
+outs:
+- md5: 51c617891a8113a0eae87f283998b50f.dir
+  path: Telemanom
+  cache: true
+  metric: false
+  persist: false

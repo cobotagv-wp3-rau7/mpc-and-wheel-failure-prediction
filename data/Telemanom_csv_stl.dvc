@@ -1,0 +1,12 @@
+md5: df6e6099278edecb161313863223ee7a
+frozen: true
+deps:
+- path: time_series/anomaly_detection/Telemanom_csv_stl
+  repo:
+    url: git@git.kplabs.pl:ml/data_registry.git
+    rev_lock: 5df54da6cf741693abc804f42d584c97d6cd654b
+outs:
+- md5: df4a958bda88711298ab6b15c3124073.dir
+  size: 140444617
+  nfiles: 164
+  path: Telemanom_csv_stl

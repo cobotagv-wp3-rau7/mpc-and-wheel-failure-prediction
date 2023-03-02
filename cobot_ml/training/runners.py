@@ -130,7 +130,9 @@ def run_training(
         train_logs["valid_loss"].append(valid_loss)
         train_logs["epoch_times"].append(tock - tick)
         train_logs["epoch_count"] = epoch
-        if best_loss > valid_loss:
+
+        print(f"train_loss={train_loss}, valid_loss={valid_loss}")
+        if valid_loss < best_loss:
             best_loss = valid_loss
             train_logs["best_epoch"] = epoch
             best_model_state = copy.deepcopy(model.state_dict())

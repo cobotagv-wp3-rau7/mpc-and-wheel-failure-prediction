@@ -20,6 +20,14 @@ from cobot_ml.training import runners
 from concurrent.futures import ThreadPoolExecutor
 import plotly.express as px
 
+from enum import Enum
+
+
+class DsMode(Enum):
+    UNIVARIATE = 1
+    WITH_MPC = 2
+    WITHOUT_MPC = 3
+
 
 def plot_results(
         real_values: np.ndarray,
@@ -45,6 +53,7 @@ def prepare_dataset(
         channel_values: typing.Union[pd.DataFrame, np.ndarray],
         input_steps: int,
         output_steps: int,
+        ds_mode: DsMode,
         pad_beginning: bool = False,
         take_max_samples: int = None,
 ) -> dss.TensorPairsDataset:
@@ -57,8 +66,14 @@ def prepare_dataset(
         patches = sample(patches, take_max_samples)
 
     patches = [torch.from_numpy(patch.astype(np.float32)) for patch in patches]
-    X = [patch[:input_steps, 1:] for patch in patches]
-    y = [patch[input_steps:, Telemanom.TELEMETRY_VALUE_IDX] for patch in patches]
+    if ds_mode == DsMode.UNIVARIATE:
+        X = [patch[:input_steps, [0]] for patch in patches]
+    elif ds_mode == DsMode.WITH_MPC:
+        X = [patch[:input_steps, :] for patch in patches]
+    else:
+        X = [patch[:input_steps, 1:] for patch in patches]
+    # y = [patch[input_steps:, 0] for patch in patches]
+    y = [patch[input_steps:, :] for patch in patches]
     return dss.TensorPairsDataset(X, y)
 
 
@@ -105,20 +120,21 @@ def process(
         forecast_length: int,
         model: nn.Module,
         dataset_name: str,
-        channel_name
+        channel_name,
+        ds_mode,
+        base
 ):
-    number_of_epochs: int = 150
+    number_of_epochs: int = 400
     base_lr: float = 0.01
     batch_size: int = 64
     valid_set_size: float = 0.1
-    patience: int = 15
-    device = torch.device("cpu")
+    patience: int = 10000
+    device = torch.device("cuda:0")
 
     #################################################################################
     os.chdir(os.path.join(os.path.dirname(__file__), "", ".."))
     dataset = DatasetInputData.create(dataset_name)
 
-    base = "c:\\experiments\\20220919\\"
     experiment_subfolder_path = os.path.join(base, f"{str(model)},input_length={input_length},dataset={dataset_name}",
                                              channel_name)
     os.makedirs(experiment_subfolder_path, exist_ok=True)
@@ -132,7 +148,7 @@ def process(
         return
     #################################################################################
     train_dataset = prepare_dataset(
-        train_channel, input_length, forecast_length
+        train_channel, input_length, forecast_length, ds_mode
     )
 
     valid_samples_count = int(len(train_dataset) * valid_set_size)
@@ -174,111 +190,63 @@ def process(
 
 ######################
 
-def first_stage():
-    for input_length in range(10, 200, 20):
-        for output_length in [10]:
-            for dataset, subset in [
-                # (Datasets.EagleOne, None),
-                (Datasets.Formica20220104, None),
-                # (Datasets.Husky, dss.Husky.SUBSET),
-                # (Datasets.IEEEBattery, dss.IEEEBattery.SUBSET)
-            ]:
-                for model, params in [
-                    (models.LSTM, {"n_layers": 1}),
-                    (models.BiLSTM, {"n_layers": 1}),
-                    (models.GRU, {"n_layers": 1}),
-                    (models.BiGRU, {"n_layers": 1}),
 
-                    (models.LSTM, {"n_layers": 2}),
-                    (models.BiLSTM, {"n_layers": 2}),
-                    (models.GRU, {"n_layers": 2}),
-                    (models.BiGRU, {"n_layers": 2}),
-                ]:
-                    yield input_length, output_length, dataset, subset, model, params
-
-
-###################################################################3
-def formica_2nd_stage():
-    for input_length in [50, 90, 150, 170]:
+def cobot_202210():
+    for input_length in [8]:#, 16, 32, 64]:#
         for dataset, subset in [
-            (Datasets.Formica_005, None),
-            (Datasets.Formica_01, None),
-            (Datasets.Formica_02, None),
-            (Datasets.Formica_04, None),
+            (Datasets.CoBot202210, ["train"]),
         ]:
             for model, params in [
-                (models.LSTM, {"n_layers": 2}),
+                # (models.LSTM, {"n_layers": 1}),
+                # (models.LSTM, {"n_layers": 2}),
+                # (models.GRU, {"n_layers": 1}),
+                # (models.GRU, {"n_layers": 2}),
+                (models.SCINet2, {})
             ]:
                 yield input_length, 10, dataset, subset, model, params
-
-
-###################################################################3
-def husky_2nd_stage():
-    for input_length in [10, 30, 50, 90]:
-        for dataset, subset in [
-            (Datasets.Husky_005, dss.Husky.SUBSET),
-            (Datasets.Husky_01, dss.Husky.SUBSET),
-            (Datasets.Husky_02, dss.Husky.SUBSET),
-            (Datasets.Husky_04, dss.Husky.SUBSET),
-        ]:
-            for model, params in [
-                (models.LSTM, {"n_layers": 2}),
-            ]:
-                yield input_length, 10, dataset, subset, model, params
-
-
-###################################################
-def ieee_battery_2nd_stage():
-    for dataset, subset in [
-        (Datasets.IEEEBattery_005, dss.IEEEBattery.SUBSET),
-        (Datasets.IEEEBattery_03, dss.IEEEBattery.SUBSET),
-        (Datasets.IEEEBattery_04, dss.IEEEBattery.SUBSET),
-    ]:
-        for model, params, input_length in [
-            (models.BiLSTM, {"n_layers": 1}, 70),
-            (models.BiLSTM, {"n_layers": 2}, 10),
-            (models.LSTM, {"n_layers": 1}, 70),
-            (models.LSTM, {"n_layers": 2}, 10),
-        ]:
-            yield input_length, 10, dataset, subset, model, params
-
 
 class MThread:
-    def __init__(self, feature_count, forecast_length, params, model_fun, dataset_name, channel, input_length):
+    def __init__(self, feature_count, forecast_length, params, model_fun, dataset_name, channel, ds_mode, input_length, base):
         self.feature_count = feature_count
         self.forecast_length = forecast_length
         self.params = params
         self.model_fun = model_fun
         self.dataset_name = dataset_name
         self.channel = channel
+        self.ds_mode = ds_mode
         self.input_length = input_length
+        self.base = base
 
     def run(self) -> None:
-        model = self.model_fun(features_count=self.feature_count, forecast_length=self.forecast_length, **self.params)
-        model.__setattr__("input_length", self.input_length)
-        process(self.input_length, self.forecast_length, model, self.dataset_name, self.channel)
+        # print('xxx')
+        model = self.model_fun(features_count=self.feature_count, forecast_length=self.forecast_length, window_length=self.input_length, **self.params)
+        # model = self.model_fun(features_count=self.feature_count, forecast_length=self.forecast_length, **self.params)
+        # model.__setattr__("input_length", self.input_length)
+        process(self.input_length, self.forecast_length, model, self.dataset_name, self.channel, self.ds_mode, self.base)
 
 
 if __name__ == "__main__":
     threads = []
 
-    to_be_processed = list(formica_2nd_stage())
+    to_be_processed = list(cobot_202210())
+    ds_mode = DsMode.WITH_MPC
+    base = "c:\\experiments\\cobot_2023_scinet2\\"
 
     for input_length, forecast_length, dataset_name, subset, model_fun, params in to_be_processed:
         dataset = DatasetInputData.create(dataset_name)
         _, cols, _ = dataset.channel(dataset.channel_names()[0])
-        feature_count = len(cols) - 1
+        feature_count = len(cols) # HERE another one switch - 1
         if subset is None:
             channels = dataset.channel_names()
         else:
             channels = subset
         for ch in channels:
             threads.append(MThread(
-                feature_count, forecast_length, params, model_fun, dataset_name, ch, input_length
+                feature_count, forecast_length, params, model_fun, dataset_name, ch, ds_mode, input_length, base
             ))
 
     threads = sorted(threads, key=lambda x: x.dataset_name)
 
-    with ThreadPoolExecutor(max_workers=12) as ex:
+    with ThreadPoolExecutor(max_workers=4) as ex:
         for i, t in enumerate(threads):
             f = ex.submit(t.run)

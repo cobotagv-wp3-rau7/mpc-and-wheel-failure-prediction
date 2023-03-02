@@ -1,0 +1,13 @@
+md5: f68ffaa4ff613eb628c08b3bbea0499a
+locked: true
+deps:
+- path: time_series/anomaly_detection/itrust
+  repo:
+    url: git@git.kplabs.pl:ml/data_registry.git
+    rev_lock: f67b2ed477f91f94d7fc753ca74fd64cce711cbd
+outs:
+- md5: b698b3ac1c764af19043dee7b679c5bb.dir
+  path: itrust
+  cache: true
+  metric: false
+  persist: false

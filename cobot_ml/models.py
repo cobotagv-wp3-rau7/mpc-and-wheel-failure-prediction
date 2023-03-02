@@ -1,5 +1,64 @@
 import torch
 from torch import nn
+import cobot_ml.SCINet as SN
+
+
+class SCINet(nn.Module):
+    def __init__(self, features_count: int = -1, forecast_length: int = -1, window_length: int = -1):
+        super().__init__()
+        self.forecast_length = forecast_length
+        self.scinet = SN.SCINet(output_len=forecast_length, input_len=window_length, input_dim=features_count)
+        self.linear = nn.Linear(features_count, 1)
+
+
+    def __str__(self):
+        return f"model=SCINet,forecast={self.forecast_length}"
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # batch, window, features
+        # torch.Size([64, 5, 83])
+        # torch.Size([64, 5, 80])
+        # torch.Size([64, 10])
+        # batch, output
+
+        #x: (batch, window, features)
+        out = self.scinet(x)
+
+        # print(out.shape)
+        #out: (batch, horizon, features)
+        out = self.linear(out)
+        # print(out.shape)
+        out = out[:, :, 0]
+        return out
+
+
+class SCINet2(nn.Module):
+    def __init__(self, features_count: int = -1, forecast_length: int = -1, window_length: int = -1):
+        super().__init__()
+        self.forecast_length = forecast_length
+        self.scinet = SN.SCINet(output_len=forecast_length, input_len=window_length, input_dim=features_count)
+        # self.linear = nn.Linear(features_count, 1)
+
+
+    def __str__(self):
+        return f"model=SCINet2,forecast={self.forecast_length}"
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # batch, window, features
+        # torch.Size([64, 5, 83])
+        # torch.Size([64, 5, 80])
+        # torch.Size([64, 10])
+        # batch, output
+
+        #x: (batch, window, features)
+        out = self.scinet(x)
+
+        # print(out.shape)
+        #out: (batch, horizon, features)
+        # out = self.linear(out)
+        # print(out.shape)
+        # out = out[:, :, 0]
+        return out
 
 
 class BiLSTM(nn.Module):
@@ -93,6 +152,7 @@ class LSTM(nn.Module):
         super().__init__()
         self.forecast_length = forecast_length
         self.n_layers = n_layers
+        self.attention = nn.MultiheadAttention(embed_dim=features_count, num_heads=4)
         self.rnn = nn.LSTM(
             input_size=features_count,
             hidden_size=hidden_size,
@@ -106,7 +166,8 @@ class LSTM(nn.Module):
         return f"model=LSTM,layers={self.n_layers},forecast={self.forecast_length}"
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out, _ = self.rnn(x)
+        # xx, _ = self.attention(x, x, x)
+        out, _ = self.rnn(x)# * xx)
         out = out[:, -1, :]
         out = self.linear(out)
         return out
@@ -138,7 +199,10 @@ class GRU(nn.Module):
         return f"model=GRU,layers={self.n_layers},forecast={self.forecast_length}"
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # print(x.shape)
         out, _ = self.rnn(x)
+        # print(out.shape)
         out = out[:, -1, :]
         out = self.linear(out)
+        # print(out.shape)
         return out

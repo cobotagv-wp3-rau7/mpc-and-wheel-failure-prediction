@@ -412,5 +412,7 @@ if __name__ == '__main__':
                    single_step_output_One=args.single_step_output_One, positionalE=args.positionalEcoding,
                    modified=True).cuda()
     x = torch.randn(32, 96, 9).cuda()
+    print(x.shape)
     y = model(x)
+    #(batch, window, features)
     print(y.shape)
