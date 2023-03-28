@@ -59,14 +59,39 @@ from matplotlib import pyplot as plt
 
 
 
-lstm = np.load("c:/experiments/cobot_2023_weighted_multivariate_with_MPC/model=LSTM,layers=2,forecast=10,input_length=5,dataset=CoBot202210/_test_train/test_predictions.npy")
-# scinet = np.load("c:/experiments/cobot_2023_weighted_multivariate_with_MPC/model=SCINet,forecast=10,input_length=64,dataset=CoBot202210/_test_train/test_predictions.npy")
+# weighted_multivariate_with_MPC
+# weighted_multivariate_with_MPC
+# weighted_multivariate_wo_MPC
+# weighted_multivariate_with_MPC
+# weighted_multivariate_wo_MPC
 
+for shift, preds, descr in [
+    (10, "c:/experiments/cobot_2023_weighted_multivariate_with_MPC/model=GRU,layers=2,forecast=10,input_length=10,dataset=CoBot202210/_test_train/test_predictions_complete.npy", "GRU"),
+    (64, "c:/experiments/cobot_2023_weighted_multivariate_with_MPC/model=SCINet,forecast=10,input_length=64,dataset=CoBot202210/_test_train/test_predictions_complete.npy", "SCINet"),
+    (10, "c:/experiments/cobot_2023_weighted_multivariate_wo_MPC/model=LSTM,layers=2,forecast=10,input_length=10,dataset=CoBot202210/_test_train/test_predictions_complete.npy", "LSTM"),
+]:
+    vals = np.load(preds)
+    vals_1st = vals[:, 0]
+    vals_10th = vals[:, 9]
 
-plt.plot(mpc, 'b', label="actual mpc")
-plt.plot(lstm, 'r', label="LSTM predictions")
-# plt.plot(scinet, 'g', label="SCINet predictions")
-plt.legend()
-plt.xlabel("t [s]")
-plt.ylabel("momentary power consumption [W]")
-plt.show()
+    # vals = np.insert(np.load(), 0, np.zeros((10,)))
+    # vals_1st = np.insert(vals_1st, 0, np.zeros((shift,)))
+    vals_10th = np.insert(vals_10th, 0, np.zeros((10,)))
+
+    left = 2200
+    right = 2500
+    plt.plot(mpc[left:right], 'b', label="actual MPC")
+    plt.plot(vals_1st[left:right], 'r', label=f"{descr} predictions - nearest prediction")
+    # plt.plot(scinet, 'g', label="SCINet predictions")
+    plt.legend()
+    plt.xlabel("t [s]")
+    plt.ylabel("momentary power consumption [W]")
+    plt.show()
+
+    plt.plot(mpc[left:right], 'b', label="actual MPC")
+    plt.plot(vals_10th[left:right], 'r', label=f"{descr} predictions - 10 s forward")
+    # plt.plot(scinet, 'g', label="SCINet predictions")
+    plt.legend()
+    plt.xlabel("t [s]")
+    plt.ylabel("momentary power consumption [W]")
+    plt.show()

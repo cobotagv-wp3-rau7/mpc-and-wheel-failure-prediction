@@ -1,8 +1,6 @@
 import json
 import os
 import sys
-import typing
-from random import sample
 
 import numpy as np
 import pandas as pd
@@ -10,23 +8,18 @@ import torch
 from torch import nn, optim
 from torch.utils import data
 
+from cobot_ml.data.utilities import DsMode, prepare_dataset, prepare_dataset_with_original
+from cobot_ml.utilities import dumps_file
+
 sys.path.append(os.getcwd())
 
 from cobot_ml.data.datasets import DatasetInputData, Datasets
 
-from cobot_ml import models, detectors
-from cobot_ml.data import datasets as dss, patchers
+from cobot_ml import models
+from cobot_ml.data import datasets as dss
 from cobot_ml.training import runners
 from concurrent.futures import ThreadPoolExecutor
 import plotly.express as px
-
-from enum import Enum
-
-
-class DsMode(Enum):
-    UNIVARIATE = 1
-    WITH_MPC = 2
-    WITHOUT_MPC = 3
 
 
 def plot_results(
@@ -47,34 +40,6 @@ def unravel_vector(vector: torch.Tensor) -> np.ndarray:
     from the last sample).
     """
     return torch.cat([vector[:-1, 0], vector[-1, :]]).detach().cpu().numpy()
-
-
-def prepare_dataset(
-        channel_values: typing.Union[pd.DataFrame, np.ndarray],
-        input_steps: int,
-        output_steps: int,
-        ds_mode: DsMode,
-        pad_beginning: bool = False,
-        take_max_samples: int = None,
-) -> dss.TensorPairsDataset:
-    if pad_beginning:
-        channel_values = detectors.pad_beginning(channel_values, input_steps)
-    patches = patchers.patch_with_stride(
-        channel_values, input_steps + output_steps, stride=1
-    )
-    if take_max_samples is not None and len(patches) > take_max_samples:
-        patches = sample(patches, take_max_samples)
-
-    patches = [torch.from_numpy(patch.astype(np.float32)) for patch in patches]
-    if ds_mode == DsMode.UNIVARIATE:
-        X = [patch[:input_steps, [0]] for patch in patches]
-    elif ds_mode == DsMode.WITH_MPC:
-        X = [patch[:input_steps, :] for patch in patches]
-    else:
-        X = [patch[:input_steps, 1:] for patch in patches]
-    # y = [patch[input_steps:, 0] for patch in patches]
-    y = [patch[input_steps:, :] for patch in patches]
-    return dss.TensorPairsDataset(X, y)
 
 
 def perform_training(model: nn.Module,
@@ -110,21 +75,17 @@ def perform_training(model: nn.Module,
     return best_model_state, train_logs
 
 
-def dumps_file(path, _object):
-    with open(path, "w") as params_file:
-        json.dump(_object, params_file, indent=4)
-
-
 def process(
         input_length: int,
         forecast_length: int,
         model: nn.Module,
         dataset_name: str,
+        dataset: DatasetInputData,
         channel_name,
         ds_mode,
         base
 ):
-    number_of_epochs: int = 400
+    number_of_epochs: int = 50
     base_lr: float = 0.01
     batch_size: int = 64
     valid_set_size: float = 0.1
@@ -132,24 +93,17 @@ def process(
     device = torch.device("cuda:0")
 
     #################################################################################
-    os.chdir(os.path.join(os.path.dirname(__file__), "", ".."))
-    dataset = DatasetInputData.create(dataset_name)
 
     experiment_subfolder_path = os.path.join(base, f"{str(model)},input_length={input_length},dataset={dataset_name}",
                                              channel_name)
     os.makedirs(experiment_subfolder_path, exist_ok=True)
     if os.path.exists(os.path.join(experiment_subfolder_path, "model.pt")):
-        return
+        return experiment_subfolder_path
 
     print(experiment_subfolder_path)
 
-    chname, columns, train_channel = dataset.channel(channel_name)
-    if chname is None:
-        return
     #################################################################################
-    train_dataset = prepare_dataset(
-        train_channel, input_length, forecast_length, ds_mode
-    )
+    train_dataset = prepare_dataset_with_original(dataset, channel_name, input_length, forecast_length, ds_mode)
 
     valid_samples_count = int(len(train_dataset) * valid_set_size)
     train_subset, valid_subset = data.random_split(
@@ -186,6 +140,8 @@ def process(
     model.load_state_dict(best_model_state)
 
     torch.save(model, os.path.join(experiment_subfolder_path, "model.pt"))
+
+    return experiment_subfolder_path
 
 
 ######################

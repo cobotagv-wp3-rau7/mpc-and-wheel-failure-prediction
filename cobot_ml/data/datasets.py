@@ -597,27 +597,27 @@ class CoBot202210Data(DatasetInputData):
         self.train_data = pd.concat([self.run_1.iloc[:int(0.8 * run1_len), :], self.run_2_3_4], ignore_index=True)
         self.test_data = pd.concat([self.run_1.iloc[int(0.8 * run1_len):, :], self.run_5_6], ignore_index=True)
 
-        # self.standardize()
-        self.minmax(weighted=True)
-
         print(f"Loaded Cobot202210: len(train)={len(self.train_data)}, len(test)={len(self.test_data)}")
 
-    def minmax(self, weighted: bool = False):
+    def minmax(self):
         for c in self.columns:
             md = self.metadata[c]
             if md["type"] != "bool":
-                if weighted:
-                    corr = abs(self.mpc_correlations.loc[c])
-                else:
-                    corr = 1.0
                 _min = self._minmax[c][0]
                 _max = self._minmax[c][1]
                 if (_max - _min) > 0:
-                    self.train_data[c] = (self.train_data[c] - _min) / (_max - _min) * corr
-                    self.test_data[c] = (self.test_data[c] - _min) / (_max - _min) * corr
+                    self.train_data[c] = (self.train_data[c] - _min) / (_max - _min)
+                    self.test_data[c] = (self.test_data[c] - _min) / (_max - _min)
                 else:
-                    self.train_data[c] = 0.5 * corr
-                    self.test_data[c] = 0.5 * corr
+                    self.train_data[c] = 0.5
+                    self.test_data[c] = 0.5
+        self.original_train_data = self.train_data.copy(deep=True)
+        self.original_test_data = self.test_data.copy(deep=True)
+
+    def apply_weights(self, weights):
+        for i in range(len(weights)):
+            self.test_data.iloc[:, i] = weights[i] * self.test_data.iloc[:, i]
+            self.train_data.iloc[:, i] = weights[i] * self.train_data.iloc[:, i]
 
     def standardize(self):
         for c in self.columns:
@@ -631,11 +631,11 @@ class CoBot202210Data(DatasetInputData):
 
     def channel(self, channel_name):
         if channel_name == "train":
-            return channel_name, self.columns, self.train_data.to_numpy()
+            return channel_name, self.columns, self.train_data.to_numpy(), self.original_train_data.to_numpy()
         elif channel_name == "test":
-            return channel_name, self.columns, self.test_data.to_numpy()
+            return channel_name, self.columns, self.test_data.to_numpy(), self.original_test_data.to_numpy()
         else:
-            raise f"Invalid channel name {channel_name}"
+            raise f"Invalid channel name {channel_name}. Only 'train' and 'test' allowed"
 
 
 DatasetInputData.implementations[Datasets.CoBot202210] = (CoBot202210Data, "c:\\datasets\\cobot_newest\\10\\")

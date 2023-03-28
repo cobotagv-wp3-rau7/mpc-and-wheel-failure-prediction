@@ -1,6 +1,5 @@
 import glob
 import os
-import typing
 import json
 import time
 
@@ -10,9 +9,9 @@ import pandas as pd
 import torch
 from torch.utils import data
 
-from cobot_ml import detectors
-from cobot_ml.data import datasets, patchers
+from typing import Sequence
 from cobot_ml.data.datasets import DatasetInputData
+from cobot_ml.data.utilities import prepare_dataset_with_original, DsMode
 from cobot_ml.training import runners
 from cobot_ml.evaluation import forecasting_metrics as fm
 
@@ -44,47 +43,25 @@ def unravel_vector(vector: torch.Tensor) -> np.ndarray:
     return torch.cat([vector[:-1, 0], vector[-1, :]]).detach().cpu().numpy()
 
 
-def prepare_dataset(
-        channel_values: typing.Union[pd.DataFrame, np.ndarray],
-        input_steps: int,
-        output_steps: int,
-        mode
-) -> datasets.TensorPairsDataset:
-    channel_values = detectors.pad_beginning(channel_values, input_steps)
-    patches = patchers.patch_with_stride(
-        channel_values, input_steps + output_steps, stride=1
-    )
-    patches = [torch.from_numpy(patch.astype(np.float32)) for patch in patches]
-    if mode == "uni":
-        X = [patch[:input_steps, [0]] for patch in patches]
-    elif mode == "with_mpc":
-        X = [patch[:input_steps, :] for patch in patches]
-    elif mode == "wo_mpc":
-        X = [patch[:input_steps, 1:] for patch in patches]
-    y = [patch[input_steps:, 0] for patch in patches]
-    return datasets.TensorPairsDataset(X, y)
-
-
-def run_prediction(mode, output_path: str,
+def run_prediction(ds_mode: DsMode,
+                   output_path: str,
                    model_path: str,
                    input_steps: int,
                    output_steps: int,
-                   dataset_name: str,
-                   subset,
-                   batch_size: int):
+                   dataset: DatasetInputData,
+                   subset: Sequence[str],
+                   batch_size: int,
+                   plot: bool=True):
     print(model_path)
     device = torch.device("cuda:0")
     model = torch.load(model_path, map_location=device)
 
-    dataset_ = DatasetInputData.create(dataset_name)
-
     metrics = dict()
 
-    for channel_name in dataset_.channel_names():
-        name, cols, chdata = dataset_.channel(channel_name)
-        if name is None or name not in subset:
+    for channel_name in dataset.channel_names():
+        if channel_name not in subset:
             continue
-        ds = prepare_dataset(chdata, input_steps, output_steps, mode)
+        ds = prepare_dataset_with_original(dataset, channel_name, input_steps, output_steps, ds_mode, pad_beginning=True)
 
         beg = time.time()
         predictions_file_path = os.path.join(output_path, f"{channel_name}_predictions_complete.npy")
@@ -164,12 +141,13 @@ def run_prediction(mode, output_path: str,
         # real_values = np.array(torch.hstack([torch.tensor(real_values), ds.targets[-1][:,0]]))[input_steps:]
         real_values = np.array(ds.get_unraveled_targets())[input_steps:]
 
-        plot_results(
-            f"{channel_name}_predictions.png",
-            real_values,
-            y_pred,
-            os.path.join(output_path, f"{channel_name}_predictions.png"),
-        )
+        if plot:
+            plot_results(
+                f"{channel_name}_predictions.png",
+                real_values,
+                y_pred,
+                os.path.join(output_path, f"{channel_name}_predictions.png"),
+            )
 
 
         metrics[channel_name]["mse"] = float(fm.mse(real_values, y_pred))
@@ -179,49 +157,51 @@ def run_prediction(mode, output_path: str,
         metrics[channel_name]["timing"] = float(fin - beg)
 
     dumps_file(os.path.join(output_path, f"metrics.json"), metrics)
+    return metrics
 
+if __name__ == "__main__":
 
-dd = dict()
-i = 0
+    dd = dict()
+    i = 0
 
-# name, cols, chdata = dataset_.channel(channel_name)
+    # name, cols, chdata = dataset_.channel(channel_name)
 
-for exps, mode in [
-    ("cobot_2023_multivariate_with_MPC", "with_mpc"),
-    ("cobot_2023_multivariate_wo_MPC", "wo_mpc"),
-    ("cobot_2023_univariate", "uni"),
-    ("cobot_2023_weighted_multivariate_with_MPC", "with_mpc"),
-    ("cobot_2023_weighted_multivariate_wo_MPC", "wo_mpc")
-]:
+    for exps, mode in [
+        ("cobot_2023_multivariate_with_MPC", "with_mpc"),
+        ("cobot_2023_multivariate_wo_MPC", "wo_mpc"),
+        ("cobot_2023_univariate", "uni"),
+        ("cobot_2023_weighted_multivariate_with_MPC", "with_mpc"),
+        ("cobot_2023_weighted_multivariate_wo_MPC", "wo_mpc")
+    ]:
 
-    for experiment_path in natsort.natsorted(glob.glob(f"c:\\experiments\\{exps}\\*")):
-        model_path = "/dev/null"
-        subset = ["test"]
-        for channel_path in natsort.natsorted(glob.glob(os.path.join(experiment_path, "*"))):
-            model_path = os.path.join(channel_path, "model.pt")
-            if os.path.exists(model_path):
-                subset.append(os.path.basename(channel_path))
+        for experiment_path in natsort.natsorted(glob.glob(f"c:\\experiments\\{exps}\\*")):
+            model_path = "/dev/null"
+            subset = ["test"]
+            for channel_path in natsort.natsorted(glob.glob(os.path.join(experiment_path, "*"))):
+                model_path = os.path.join(channel_path, "model.pt")
+                if os.path.exists(model_path):
+                    subset.append(os.path.basename(channel_path))
 
-        for channel_path in natsort.natsorted(glob.glob(os.path.join(experiment_path, "*"))):
-            model_path = os.path.join(channel_path, "model.pt")
-            if not os.path.exists(model_path):
-                continue
+            for channel_path in natsort.natsorted(glob.glob(os.path.join(experiment_path, "*"))):
+                model_path = os.path.join(channel_path, "model.pt")
+                if not os.path.exists(model_path):
+                    continue
 
-            exp_params = dict()
-            for item in os.path.basename(experiment_path).split(","):
-                k, v = item.split("=")
-                exp_params[k] = v
+                exp_params = dict()
+                for item in os.path.basename(experiment_path).split(","):
+                    k, v = item.split("=")
+                    exp_params[k] = v
 
-            output_path = os.path.join(experiment_path, f"_test_{os.path.basename(channel_path)}")
-            os.makedirs(output_path, exist_ok=True)
+                output_path = os.path.join(experiment_path, f"_test_{os.path.basename(channel_path)}")
+                os.makedirs(output_path, exist_ok=True)
 
-            run_prediction(
-                mode,
-                output_path,
-                model_path,
-                input_steps=int(exp_params["input_length"]),
-                output_steps=int(exp_params["forecast"]),
-                dataset_name=exp_params["dataset"],
-                subset=set(subset),
-                batch_size=64
-            )
+                run_prediction(
+                    mode,
+                    output_path,
+                    model_path,
+                    input_steps=int(exp_params["input_length"]),
+                    output_steps=int(exp_params["forecast"]),
+                    dataset_name=exp_params["dataset"],
+                    subset=set(subset),
+                    batch_size=64
+                )

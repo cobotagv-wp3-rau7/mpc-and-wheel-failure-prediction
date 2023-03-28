@@ -152,7 +152,7 @@ class LSTM(nn.Module):
         super().__init__()
         self.forecast_length = forecast_length
         self.n_layers = n_layers
-        self.attention = nn.MultiheadAttention(embed_dim=features_count, num_heads=4)
+        # self.attention = nn.MultiheadAttention(embed_dim=features_count, num_heads=4)
         self.rnn = nn.LSTM(
             input_size=features_count,
             hidden_size=hidden_size,
