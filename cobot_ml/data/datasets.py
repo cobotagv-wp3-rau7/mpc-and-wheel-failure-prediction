@@ -320,6 +320,7 @@ class Datasets:
     Husky_04 = "Husky_04"
 
     CoBot202210 = "CoBot202210"
+    CoBot20230708 = "CoBot20230708"
 
 
 class Formica_005(Formica20220104):
@@ -638,7 +639,49 @@ class CoBot202210Data(DatasetInputData):
             raise f"Invalid channel name {channel_name}. Only 'train' and 'test' allowed"
 
 
-DatasetInputData.implementations[Datasets.CoBot202210] = (CoBot202210Data, "c:\\datasets\\cobot_newest\\10\\")
+
+class CoBot20230708(DatasetInputData):
+    LABEL_COLUMN = "WHEEL_CHANGE"
+
+    def __init__(self, path, kwargs):
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.model_selection import train_test_split
+
+        base_dir = 'c:\\projekty\\cobot_july_august\\'
+        sciezka_csv = base_dir + 'concatenated_with_wheels_change_changing_columns.csv'
+
+        # Wczytaj plik CSV
+        all_the_data = pd.read_csv(sciezka_csv)
+        all_the_data = all_the_data.drop(columns=['timestamp', 'isoTimestamp', 'FH.6000.[TS] TIME STAMP.Time stamp'])
+
+        self.columns = all_the_data.columns.tolist()
+        self.columns.remove(CoBot20230708.LABEL_COLUMN)
+        self.columns.insert(0, CoBot20230708.LABEL_COLUMN)
+        all_the_data = all_the_data[self.columns]
+
+        # Znajdź kolumny, które nie są boolean
+        kolumny_do_standaryzacji = [col for col in all_the_data.columns if not np.issubdtype(all_the_data[col].dtype, np.bool)]
+
+        # Standaryzuj dane tylko dla kolumn nie będących boolean
+        scaler = StandardScaler()
+        all_the_data[kolumny_do_standaryzacji] = scaler.fit_transform(all_the_data[kolumny_do_standaryzacji])
+
+        self.train_data = all_the_data.iloc[:(len(all_the_data) // 2), :]
+        self.test_data = all_the_data.iloc[(len(all_the_data) // 2):, :]
+        print(f"Loaded Cobot20230708: len(train)={len(self.train_data)}, len(test)={len(self.test_data)}")
+
+    def channel_names(self):
+        return ["train", "test"]
+
+    def channel(self, channel_name):
+        if channel_name == "train":
+            return channel_name, self.columns, self.train_data.to_numpy()
+        elif channel_name == "test":
+            return channel_name, self.columns, self.test_data.to_numpy()
+        else:
+            raise f"Invalid channel name {channel_name}. Only 'train' and 'test' allowed"
+
+DatasetInputData.implementations[Datasets.CoBot20230708] = (CoBot20230708, "nope")
 
 
 class FormicaNew(DatasetInputData):

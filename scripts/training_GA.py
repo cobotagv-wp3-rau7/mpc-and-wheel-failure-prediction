@@ -133,16 +133,16 @@ def init_population_numeric_pearson_gaussian_0dot1_bool_pearson(dataset, epsilon
     return np.clip(np.array(initial_population), 0.0, 1.0)
 
 
-# base_dir = "a:\\202303_experiments_start_Pearson_gaussian_0.2_numeric[0-1]_bools[0,1]_2"
-base_dir = "a:\\202303_experiments_start_Pearson_plusminus_0.2_numeric[0-1]_bools[0,1]_2"
+base_dir = "a:\\202303_experiments_start_Pearson_gaussian_0.2_numeric[0-1]_bools[0,1]_3"
+# base_dir = "a:\\202303_experiments_start_Pearson_plusminus_0.2_numeric[0-1]_bools[0,1]_2"
 
 if __name__ == '__main__':
     os.makedirs(base_dir, exist_ok=True)
 
     dataset = DatasetInputData.create(dss.Datasets.CoBot202210)
 
-    initial_population = init_population_numeric_pearson_bool_pearson(dataset, 0.2)
-    # initial_population = init_population_numeric_pearson_gaussian_0dot1_bool_pearson(dataset, 0.2)
+    # initial_population = init_population_numeric_pearson_bool_pearson(dataset, 0.2)
+    initial_population = init_population_numeric_pearson_gaussian_0dot1_bool_pearson(dataset, 0.2)
     var_bounds = bounds_numeric_0_to_1_bools_0_or_1(dataset)
 
     ga_instance = pygad.GA(

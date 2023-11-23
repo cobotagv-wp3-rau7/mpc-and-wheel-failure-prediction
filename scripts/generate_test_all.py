@@ -54,7 +54,7 @@ def prepare_dataset(
         channel_values, input_steps + output_steps, stride=1
     )
     patches = [torch.from_numpy(patch.astype(np.float32)) for patch in patches]
-    X = [patch[:input_steps, 1:] for patch in patches]
+    X = [patch[:input_steps, :] for patch in patches]
     y = [patch[input_steps:, 0] for patch in patches]
     return datasets.TensorPairsDataset(X, y)
 
@@ -115,7 +115,7 @@ def run_prediction(output_path: str,
 dd = dict()
 i = 0
 
-for experiment_path in natsort.natsorted(glob.glob("/mnt/cloud/20220201_experiments/*")):
+for experiment_path in natsort.natsorted(glob.glob("c:\\experiments\cobot_2023_julyaugust\\*")):
 
     model_path = "/dev/null"
 
@@ -126,19 +126,7 @@ for experiment_path in natsort.natsorted(glob.glob("/mnt/cloud/20220201_experime
         exp_params[k] = v
     #######################################
     dataset = exp_params["dataset"]
-    if dataset not in [Datasets.Formica_005,
-                       Datasets.Formica_01,
-                       Datasets.Formica_02,
-                       Datasets.Formica_04,
-
-                       Datasets.IEEEBattery_005,
-                       Datasets.IEEEBattery_03,
-                       Datasets.IEEEBattery_04,
-
-                       Datasets.Husky_005,
-                       Datasets.Husky_01,
-                       Datasets.Husky_02,
-                       Datasets.Husky_04,
+    if dataset not in [Datasets.CoBot20230708
                        ]:
         continue
 
