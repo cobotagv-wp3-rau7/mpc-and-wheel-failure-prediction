@@ -82,7 +82,6 @@ def process(
         dataset_name: str,
         dataset: DatasetInputData,
         channel_name,
-        ds_mode,
         base
 ):
     number_of_epochs: int = 50
@@ -104,7 +103,7 @@ def process(
 
     _, _, channel = DatasetInputData.create(dataset_name).channel(channel_name)
     #################################################################################
-    train_dataset = prepare_dataset(channel, input_length, forecast_length, ds_mode)
+    train_dataset = prepare_dataset(channel, input_length, forecast_length, DsMode.WITHOUT_MPC)
 
     valid_samples_count = int(len(train_dataset) * valid_set_size)
     train_subset, valid_subset = data.random_split(
@@ -148,8 +147,8 @@ def process(
 ######################
 
 
-def cobot_202210():
-    for input_length in [8]:#, 16, 32, 64]:#
+def cobot_2023julyaugust():
+    for input_length in [10]:#, 20, 50, 100]:
         for dataset, subset in [
             (Datasets.CoBot20230708, ["train"]),
         ]:
@@ -163,14 +162,13 @@ def cobot_202210():
                 yield input_length, 10, dataset, subset, model, params
 
 class MThread:
-    def __init__(self, feature_count, forecast_length, params, model_fun, dataset_name, channel, ds_mode, input_length, base):
+    def __init__(self, feature_count, forecast_length, params, model_fun, dataset_name, channel, input_length, base):
         self.feature_count = feature_count
         self.forecast_length = forecast_length
         self.params = params
         self.model_fun = model_fun
         self.dataset_name = dataset_name
         self.channel = channel
-        self.ds_mode = ds_mode
         self.input_length = input_length
         self.base = base
 
@@ -180,27 +178,26 @@ class MThread:
         model = self.model_fun(features_count=self.feature_count, forecast_length=self.forecast_length, **self.params)
         # model.__setattr__("input_length", self.input_length)
 
-        process(self.input_length, self.forecast_length, model, self.dataset_name, DatasetInputData.create(self.dataset_name), self.channel, self.ds_mode, self.base)
+        process(self.input_length, self.forecast_length, model, self.dataset_name, DatasetInputData.create(self.dataset_name), self.channel, self.base)
 
 
 if __name__ == "__main__":
     threads = []
 
-    to_be_processed = list(cobot_202210())
-    ds_mode = DsMode.WITH_MPC
-    base = "c:\\experiments\\cobot_2023_julyaugust\\"
+    to_be_processed = list(cobot_2023julyaugust())
+    base = "c:\\experiments\\cobot_2023_julyaugust_prediction_wheel_diameter__wo_wheel_diameter_2\\"
 
     for input_length, forecast_length, dataset_name, subset, model_fun, params in to_be_processed:
         dataset = DatasetInputData.create(dataset_name)
         _, cols, _ = dataset.channel(dataset.channel_names()[0])
-        feature_count = len(cols) # HERE another one switch - 1
+        feature_count = len(cols) - 1
         if subset is None:
             channels = dataset.channel_names()
         else:
             channels = subset
         for ch in channels:
             threads.append(MThread(
-                feature_count, forecast_length, params, model_fun, dataset_name, ch, ds_mode, input_length, base
+                feature_count, forecast_length, params, model_fun, dataset_name, ch, input_length, base
             ))
 
     threads = sorted(threads, key=lambda x: x.dataset_name)

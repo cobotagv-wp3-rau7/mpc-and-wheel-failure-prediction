@@ -54,7 +54,7 @@ def prepare_dataset(
         channel_values, input_steps + output_steps, stride=1
     )
     patches = [torch.from_numpy(patch.astype(np.float32)) for patch in patches]
-    X = [patch[:input_steps, :] for patch in patches]
+    X = [patch[:input_steps, 1:] for patch in patches]
     y = [patch[input_steps:, 0] for patch in patches]
     return datasets.TensorPairsDataset(X, y)
 
@@ -103,6 +103,10 @@ def run_prediction(output_path: str,
         if channel_name not in metrics:
             metrics[channel_name] = dict()
 
+        non_nan_indices = ~np.isnan(y_pred) & ~np.isnan(real_values)
+        y_pred = y_pred[non_nan_indices]
+        real_values = real_values[non_nan_indices]
+
         metrics[channel_name]["mse"] = float(fm.mse(real_values, y_pred))
         metrics[channel_name]["mae"] = float(fm.mae(real_values, y_pred))
         metrics[channel_name]["mape"] = float(fm.mape(real_values, y_pred))
@@ -115,7 +119,7 @@ def run_prediction(output_path: str,
 dd = dict()
 i = 0
 
-for experiment_path in natsort.natsorted(glob.glob("c:\\experiments\cobot_2023_julyaugust\\*")):
+for experiment_path in natsort.natsorted(glob.glob("c:\\experiments\\cobot_2023_julyaugust_prediction_wheel_diameter__wo_wheel_diameter_2\\*")):
 
     model_path = "/dev/null"
 
@@ -130,25 +134,19 @@ for experiment_path in natsort.natsorted(glob.glob("c:\\experiments\cobot_2023_j
                        ]:
         continue
 
-    subset = []
+    subset = ["train", "test"]
     model_path = None
     for channel_path in natsort.natsorted(glob.glob(os.path.join(experiment_path, "*"))):
-        if dataset  in [Datasets.Formica_005,
-                       Datasets.Formica_01,
-                       Datasets.Formica_02,
-                       Datasets.Formica_04]:
-            m_path = os.path.join(experiment_path, "dump_from_simulation_5", "model.pt")
-        else:
-            m_path = os.path.join(channel_path, "model.pt")
+        m_path = os.path.join(channel_path, "model.pt")
         if os.path.exists(m_path):
             if model_path is None:
                 model_path = m_path
-            subset.append(os.path.basename(channel_path))
+            # subset.append(os.path.basename(channel_path))
 
     output_path = os.path.join(experiment_path, f"_test")
     print(output_path)
-    if os.path.exists(os.path.join(output_path, "metrics.json")):
-        continue
+    # if os.path.exists(os.path.join(output_path, "metrics.json")):
+    #     continue
     os.makedirs(output_path, exist_ok=True)
 
     run_prediction(

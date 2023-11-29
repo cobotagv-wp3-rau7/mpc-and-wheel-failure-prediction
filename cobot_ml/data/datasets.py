@@ -639,35 +639,72 @@ class CoBot202210Data(DatasetInputData):
             raise f"Invalid channel name {channel_name}. Only 'train' and 'test' allowed"
 
 
+class CoBot20230708Data:
+    def __init__(self):
+        base_dir = 'c:\\projekty\\cobot_july_august\\'
+        sciezka_csv = base_dir + 'concatenated_with_wheels_change_changing_columns.csv'
+
+        ignored_columns = [
+            'timestamp', 'isoTimestamp', 'FH.6000.[TS] TIME STAMP.Time stamp',
+            "FH.6000.[ENS] - Energy Signals.State Of Charge",
+            "FH.6000.[NNS] - Natural Navigation Signals.Difference heading average correction",
+            "FH.6000.[NNS] - Natural Navigation Signals.Distance average correction",
+            "FH.6000.[ENS] - Energy Signals.Battery cell voltage",
+            "FH.6000.[ODS] - Odometry Signals.Cumulative distance right",
+            "FH.6000.[ENS] - Energy Signals.Momentary current consuption mA",
+            "FH.6000.[ODS] - Odometry Signals.Cumulative distance left",
+            "FH.6000.[ENS] - Energy Signals.Cumulative energy consumption Wh",
+        ]
+
+
+        all_the_data = pd.read_csv(sciezka_csv).iloc[2:]
+        all_the_data = all_the_data.drop(columns=ignored_columns)
+
+        # move the label column to 0-th index
+        self.columns = all_the_data.columns.tolist()
+        self.columns.remove(CoBot20230708.LABEL_COLUMN)
+        self.columns.insert(0, CoBot20230708.LABEL_COLUMN)
+        self.all_the_data = all_the_data[self.columns]
+
+        self.column_stats = {}
+        for column in self.all_the_data.columns:
+            column_data = self.all_the_data[column]
+            if column_data.dtype != bool:
+                self.column_stats[column] = {
+                    'mean': column_data.mean(),
+                    'std': column_data.std(),
+                    'min': column_data.min(),
+                    'max': column_data.max(),
+                }
+
 
 class CoBot20230708(DatasetInputData):
     LABEL_COLUMN = "WHEEL_CHANGE"
 
     def __init__(self, path, kwargs):
-        from sklearn.preprocessing import StandardScaler
-        from sklearn.model_selection import train_test_split
+        self.the_data = CoBot20230708Data()
+        all_the_data = self.the_data.all_the_data.copy(deep=True)
+        for col, stats in self.the_data.column_stats.items():
+            _range = stats['max'] - stats['min']
+            if _range != 0:
+                all_the_data[col] = (all_the_data[col] - stats['min']) / _range
 
-        base_dir = 'c:\\projekty\\cobot_july_august\\'
-        sciezka_csv = base_dir + 'concatenated_with_wheels_change_changing_columns.csv'
+        slice_length = 3000
+        begin_indices = [3000, 12000, 21000, 30000, 39000, 48000, 57000, 66000]
 
-        # Wczytaj plik CSV
-        all_the_data = pd.read_csv(sciezka_csv)
-        all_the_data = all_the_data.drop(columns=['timestamp', 'isoTimestamp', 'FH.6000.[TS] TIME STAMP.Time stamp'])
+        # Inicjalizuj puste DataFrame na dane testowe
+        test_data = pd.DataFrame()
 
-        self.columns = all_the_data.columns.tolist()
-        self.columns.remove(CoBot20230708.LABEL_COLUMN)
-        self.columns.insert(0, CoBot20230708.LABEL_COLUMN)
-        all_the_data = all_the_data[self.columns]
+        # Iteruj przez indeksy początków przedziałów
+        for begin_index in begin_indices:
+            # Wyciągnij fragment danych o długości slice_length i dołącz go do test_data
+            test_data = pd.concat([test_data, all_the_data.loc[begin_index:begin_index + slice_length - 1]])
 
-        # Znajdź kolumny, które nie są boolean
-        kolumny_do_standaryzacji = [col for col in all_the_data.columns if not np.issubdtype(all_the_data[col].dtype, np.bool)]
+        # Usuń wiersze z test_data z all_the_data
+        train_data = all_the_data.drop(test_data.index)
 
-        # Standaryzuj dane tylko dla kolumn nie będących boolean
-        scaler = StandardScaler()
-        all_the_data[kolumny_do_standaryzacji] = scaler.fit_transform(all_the_data[kolumny_do_standaryzacji])
-
-        self.train_data = all_the_data.iloc[:(len(all_the_data) // 2), :]
-        self.test_data = all_the_data.iloc[(len(all_the_data) // 2):, :]
+        self.train_data = train_data
+        self.test_data = test_data
         print(f"Loaded Cobot20230708: len(train)={len(self.train_data)}, len(test)={len(self.test_data)}")
 
     def channel_names(self):
@@ -675,9 +712,9 @@ class CoBot20230708(DatasetInputData):
 
     def channel(self, channel_name):
         if channel_name == "train":
-            return channel_name, self.columns, self.train_data.to_numpy()
+            return channel_name, self.the_data.columns, self.train_data.to_numpy()
         elif channel_name == "test":
-            return channel_name, self.columns, self.test_data.to_numpy()
+            return channel_name, self.the_data.columns, self.test_data.to_numpy()
         else:
             raise f"Invalid channel name {channel_name}. Only 'train' and 'test' allowed"
 
@@ -765,6 +802,11 @@ def prepare_dataset(
     patches = patchers.patch(channel_values, input_steps + output_steps, step=1)
     X, y = [(tensor_from(patch[:input_steps, 1:]), tensor_from(patch[input_steps:, 0])) for patch in patches]
     return TensorPairsDataset(X, y)
+
+
+if __name__ == "__main__":
+    dd = CoBot20230708(None, None)
+    print('f')
 
 
 if __name__ == "!!__main__":
