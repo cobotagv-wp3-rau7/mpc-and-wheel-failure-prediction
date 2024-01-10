@@ -2,7 +2,7 @@ import json
 import time
 import typing
 
-import evaluation.forecasting_metrics as fm
+# import evaluation.forecasting_metrics as fm
 import numpy as np
 import pandas as pd
 import torch
@@ -86,11 +86,48 @@ def run_prediction(model_path: str,
     if channel_name not in metrics:
         metrics[channel_name] = dict()
 
-    metrics[channel_name]["mse"] = float(fm.mse(real_values, y_pred))
-    metrics[channel_name]["mae"] = float(fm.mae(real_values, y_pred))
-    metrics[channel_name]["mape"] = float(fm.mape(real_values, y_pred))
-    metrics[channel_name]["smape"] = float(fm.smape(real_values, y_pred))
-    metrics[channel_name]["timing"] = float(fin - beg)
+    # metrics[channel_name]["mse"] = float(fm.mse(real_values, y_pred))
+    # metrics[channel_name]["mae"] = float(fm.mae(real_values, y_pred))
+    # metrics[channel_name]["mape"] = float(fm.mape(real_values, y_pred))
+    # metrics[channel_name]["smape"] = float(fm.smape(real_values, y_pred))
+    # metrics[channel_name]["timing"] = float(fin - beg)
 
     return metrics
     #dumps_file(os.path.join(output_path, f"metrics.json"), metrics)
+
+
+
+
+class StepByStepPredictor:
+    def __init__(self, model_file: str, feature_count: int, device: str = 'cpu'):
+        self.model = torch.load(model_file, map_location=device)
+        self.model.to(device)
+        self.model.eval()
+
+        self.device = device
+
+        self.feature_count = feature_count
+
+        print(f"Model loaded from {model_file} to device {device}.")
+        print(f"Feature count: {self.feature_count}.")
+
+    def step(self, input_data: np.ndarray) -> np.ndarray:
+        """
+        input_data should be a 3D array [B, H, F], where:
+          B is for batching (can be 1)
+          H is history window size
+          F stands for features.
+
+        returns an array of size [B, output_size], where:
+          B is same as in input_data
+          output_size is a length of an output sequence defined in the model
+        """
+        assert len(input_data.shape) == 3, "Input data should be a 2D array [B, H, F]."
+        _, _, F = input_data.shape
+        assert F == self.feature_count, f"Expected {self.feature_count} features, got {F}."
+
+        input_tensor = torch.from_numpy(input_data).float().to(self.device)
+        with torch.no_grad():
+            output_tensor = self.model(input_tensor)
+
+        return output_tensor.cpu().numpy()
