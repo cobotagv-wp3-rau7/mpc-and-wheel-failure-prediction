@@ -93,23 +93,37 @@ def run_prediction(model_path: str,
     # metrics[channel_name]["timing"] = float(fin - beg)
 
     return metrics
-    #dumps_file(os.path.join(output_path, f"metrics.json"), metrics)
+    # dumps_file(os.path.join(output_path, f"metrics.json"), metrics)
 
 
+from typing import List, Callable
 
 
 class StepByStepPredictor:
-    def __init__(self, model_file: str, feature_count: int, device: str = 'cpu'):
+
+    def __init__(self,
+                 model_file: str, device: str,
+                 columns: List[str],
+                 preprocessing: Callable[[np.ndarray], np.ndarray],
+                 ):
         self.model = torch.load(model_file, map_location=device)
         self.model.to(device)
         self.model.eval()
 
+        self.columns = columns
+        self.preprocessing = preprocessing
         self.device = device
 
-        self.feature_count = feature_count
+        self.feature_count = len(columns)
 
         print(f"Model loaded from {model_file} to device {device}.")
         print(f"Feature count: {self.feature_count}.")
+
+    def get_columns(self):
+        """
+        Intended for calling code to validate and / or adjust list of features passed to step()
+        """
+        return self.columns
 
     def step(self, input_data: np.ndarray) -> np.ndarray:
         """
@@ -126,7 +140,9 @@ class StepByStepPredictor:
         _, _, F = input_data.shape
         assert F == self.feature_count, f"Expected {self.feature_count} features, got {F}."
 
-        input_tensor = torch.from_numpy(input_data).float().to(self.device)
+        preprocessed_data = self.preprocessing(input_data)
+
+        input_tensor = torch.from_numpy(preprocessed_data).float().to(self.device)
         with torch.no_grad():
             output_tensor = self.model(input_tensor)
 
