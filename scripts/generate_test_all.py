@@ -119,7 +119,7 @@ def run_prediction(output_path: str,
 dd = dict()
 i = 0
 
-for experiment_path in natsort.natsorted(glob.glob("c:\\experiments\\cobot_2023_julyaugust_prediction_wheel_diameter__wo_wheel_diameter_2\\*")):
+for experiment_path in natsort.natsorted(glob.glob("c:\\experiments\\cobot_2023_julyaugust_prediction_wheel_diameter__wo_wheel_diameter_better_train_test_split\\*")):
 
     model_path = "/dev/null"
 

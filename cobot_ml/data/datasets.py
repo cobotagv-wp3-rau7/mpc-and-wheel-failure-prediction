@@ -39,6 +39,15 @@ class TensorPairsDataset(data.Dataset):
         y = self.targets[idx]
         return X, y
 
+    def __add__(self, other):
+        if not isinstance(other, TensorPairsDataset):
+            raise TypeError(f"Unsupported operand type: {type(other)}")
+
+        new_inputs = self.inputs + other.inputs
+        new_targets = self.targets + other.targets
+
+        return TensorPairsDataset(new_inputs, new_targets)
+
     def get_unraveled_targets(self) -> torch.Tensor:
         """
         Return first value from each sample (but all values from the last
@@ -89,15 +98,17 @@ base_path_datasets_ = "c:\\datasets\\"
 
 
 class CoBot20230708Data:
+    LABEL_COLUMN = "WHEEL_DIAMETER"
+
     def __init__(self):
-        base_dir = 'c:\\projekty\\cobot_july_august\\'
-        sciezka_csv = base_dir + 'concatenated_with_wheels_change_changing_columns.csv'
+        # base_dir = 'c:\\projekty\\cobot_july_august\\'
+        # sciezka_csv = base_dir + 'concatenated_with_wheels_change_changing_columns.csv'
+        base_dir = 'c:\\projekty\\cobot_july_august2\\'
+        sciezka_csv = base_dir + 'concatenated_with_wheel_diameter_changing_columns.csv'
 
         ignored_columns = [
             'timestamp', 'isoTimestamp', 'FH.6000.[TS] TIME STAMP.Time stamp',
             "FH.6000.[ENS] - Energy Signals.State Of Charge",
-            "FH.6000.[NNS] - Natural Navigation Signals.Difference heading average correction",
-            "FH.6000.[NNS] - Natural Navigation Signals.Distance average correction",
             "FH.6000.[ENS] - Energy Signals.Battery cell voltage",
             "FH.6000.[ODS] - Odometry Signals.Cumulative distance right",
             "FH.6000.[ENS] - Energy Signals.Momentary current consuption mA",
@@ -110,8 +121,8 @@ class CoBot20230708Data:
 
         # move the label column to 0-th index
         self.columns = all_the_data.columns.tolist()
-        self.columns.remove(CoBot20230708.LABEL_COLUMN)
-        self.columns.insert(0, CoBot20230708.LABEL_COLUMN)
+        self.columns.remove(CoBot20230708Data.LABEL_COLUMN)
+        self.columns.insert(0, CoBot20230708Data.LABEL_COLUMN)
         self.all_the_data = all_the_data[self.columns]
 
         self.column_stats = {}
@@ -127,7 +138,17 @@ class CoBot20230708Data:
 
 
 class CoBot20230708(DatasetInputData):
-    LABEL_COLUMN = "WHEEL_CHANGE"
+
+    def ranges(self, indices, total_length, range_length):
+        beginning_from_indices = []
+        all_the_rest = []
+        previous_index = -range_length
+        for index in indices:
+            all_the_rest.append((previous_index + range_length, index))
+            beginning_from_indices.append((index, index+range_length))
+            previous_index = index
+        all_the_rest.append((previous_index + range_length, total_length))
+        return beginning_from_indices, all_the_rest
 
     def __init__(self, path, kwargs):
         self.the_data = CoBot20230708Data()
@@ -137,22 +158,16 @@ class CoBot20230708(DatasetInputData):
             if _range != 0:
                 all_the_data[col] = (all_the_data[col] - stats['min']) / _range
 
-        slice_length = 3000
+        slice_length = 2000
         begin_indices = [3000, 12000, 21000, 30000, 39000, 48000, 57000, 66000]
+        beginning_ranges, all_the_rest = self.ranges(begin_indices, len(all_the_data), slice_length)
 
-        # Inicjalizuj puste DataFrame na dane testowe
-        test_data = pd.DataFrame()
+        train_dfs = [all_the_data.iloc[rb:re] for rb, re in beginning_ranges]
+        test_dfs = [all_the_data.iloc[rb:re] for rb, re in all_the_rest]
 
-        # Iteruj przez indeksy początków przedziałów
-        for begin_index in begin_indices:
-            # Wyciągnij fragment danych o długości slice_length i dołącz go do test_data
-            test_data = pd.concat([test_data, all_the_data.loc[begin_index:begin_index + slice_length - 1]])
+        self.train_data = pd.concat(train_dfs, ignore_index=True)
+        self.test_data = pd.concat(test_dfs, ignore_index=True)
 
-        # Usuń wiersze z test_data z all_the_data
-        train_data = all_the_data.drop(test_data.index)
-
-        self.train_data = train_data
-        self.test_data = test_data
         print(f"Loaded Cobot20230708: len(train)={len(self.train_data)}, len(test)={len(self.test_data)}")
 
     def channel_names(self):
@@ -167,7 +182,64 @@ class CoBot20230708(DatasetInputData):
             raise f"Invalid channel name {channel_name}. Only 'train' and 'test' allowed"
 
 
+    def prepare_dataset(
+            self,
+            channel_name: str,
+            input_steps: int,
+            output_steps: int,
+    ) -> TensorPairsDataset:
+        if channel_name == "train":
+            the_data = self.train_data.to_numpy()
+        elif channel_name == "test":
+            the_data = self.test_data.to_numpy()
+        else:
+            raise f"Invalid channel name {channel_name}. Only 'train' and 'test' allowed"
+
+        patches = patchers.patch_with_stride(the_data, (input_steps + output_steps), stride=1)
+
+        patches = [torch.from_numpy(patch.astype(np.float32)) for patch in patches]
+        X = [patch[:input_steps, 1:] for patch in patches]
+        y = [patch[input_steps:, 0] for patch in patches]
+        return TensorPairsDataset(X, y)
+
+
+
+
 DatasetInputData.implementations[Datasets.CoBot20230708] = (CoBot20230708, "nope")
+
+
+
+class CoBot20230708ForSVM(DatasetInputData):
+
+    def __init__(self, path, kwargs):
+        self.the_data = CoBot20230708Data()
+        all_the_data = self.the_data.all_the_data.copy(deep=True)
+        for col, stats in self.the_data.column_stats.items():
+            _range = stats['max'] - stats['min']
+            if _range != 0:
+                all_the_data[col] = (all_the_data[col] - stats['min']) / _range
+
+        bool_columns = all_the_data.select_dtypes(include='bool').columns
+        all_the_data[bool_columns] = all_the_data[bool_columns].replace({True: 1, False: 0})
+        all_the_data[bool_columns] = all_the_data[bool_columns].astype(int)
+
+        train_test_split_point = 8000
+        self.train_data = all_the_data.iloc[:train_test_split_point]
+        self.test_data = all_the_data.iloc[train_test_split_point:]
+
+        print(f"Loaded Cobot20230708: len(train)={len(self.train_data)}, len(test)={len(self.test_data)}")
+
+    def channel_names(self):
+        return ["train", "test"]
+
+    def channel(self, channel_name):
+        if channel_name == "train":
+            return channel_name, self.the_data.columns, self.train_data.to_numpy()
+        elif channel_name == "test":
+            return channel_name, self.the_data.columns, self.test_data.to_numpy()
+        else:
+            raise f"Invalid channel name {channel_name}. Only 'train' and 'test' allowed"
+
 
 
 ######

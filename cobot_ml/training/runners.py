@@ -10,6 +10,44 @@ from torch.optim.optimizer import Optimizer
 from torch.utils import data
 
 
+def _run_epoch(
+        model: nn.Module,
+        data_loader: data.DataLoader,
+        optimizer: typing.Optional[Optimizer],
+        criterion: typing.Callable,
+        device: torch.device,
+        is_train: bool
+) -> object:
+    """
+    Function performing one training/validation epoch.
+    Args:
+        :param model: Network on which epoch is performed.
+        :param data_loader: Loader providing data to train from.
+        :param optimizer: Optimizer which performs optimization of the training loss.
+        :param criterion: Function to calculate training loss.
+        :param device: Device where the data will be sent.
+        :param is_train: if a train or validation epoch is to be run
+    """
+    model.train(is_train)
+    losses = []
+    for _input, _target in data_loader:
+        _input = _input.to(device)
+        _target = _target.to(device)
+
+        if is_train:
+            optimizer.zero_grad()
+
+        output = model(_input)
+        loss = criterion(output, _target)
+
+        if is_train:
+            loss.backward()
+            optimizer.step()
+
+        losses.append(loss.item())
+    return np.mean(losses)
+
+
 def run_training_epoch(
         model: nn.Module,
         data_loader: data.DataLoader,
@@ -18,26 +56,15 @@ def run_training_epoch(
         device: torch.device,
 ):
     """
-    Function performing one training epoch.
+    Function performing one training/validation epoch.
     Args:
         :param model: Network on which epoch is performed.
         :param data_loader: Loader providing data to train from.
         :param optimizer: Optimizer which performs optimization of the training loss.
         :param criterion: Function to calculate training loss.
-        :param device: Device where the data will be send.
+        :param device: Device where the data will be sent.
     """
-    model.train(True)
-    losses = []
-    for input, target in data_loader:
-        input = input.to(device)
-        target = target.to(device)
-        optimizer.zero_grad()
-        output = model(input)
-        loss = criterion(output, target)
-        loss.backward()
-        optimizer.step()
-        losses.append(loss.item())
-    return np.mean(losses)
+    return _run_epoch(model, data_loader, optimizer, criterion, device, True)
 
 
 def run_validation_epoch(
@@ -47,24 +74,14 @@ def run_validation_epoch(
         device: torch.device,
 ):
     """
-    Function performing one validation epoch.
+    Function performing one training/validation epoch.
     Args:
-        :param device: Device where the data will be send.
         :param model: Network on which epoch is performed.
-        :param data_loader: Loader providing data on which model is validated.
-        :param criterion: Function to calculate validation loss.
-        :param device: Device where the data will be send.
+        :param data_loader: Loader providing data to train from.
+        :param criterion: Function to calculate training loss.
+        :param device: Device where the data will be sent.
     """
-    model.train(False)
-    losses = []
-    with torch.no_grad():
-        for input, target in data_loader:
-            input = input.to(device)
-            target = target.to(device)
-            output = model(input)
-            loss = criterion(output, target)
-            losses.append(loss.item())
-    return np.mean(losses)
+    return _run_epoch(model, data_loader, None, criterion, device, False)
 
 
 def run_inference(
@@ -75,14 +92,14 @@ def run_inference(
     Args:
         :param model: Network on which epoch is performed.
         :param data_loader: Loader providing data on which model is validated.
-        :param device: Device where the data will be send.
+        :param device: Device where the data will be sent.
     """
     model.train(False)
     outputs = []
     with torch.no_grad():
-        for input, _ in data_loader:
-            input = input.to(device)
-            output = model(input)
+        for _input, _ in data_loader:
+            _input = _input.to(device)
+            output = model(_input)
             outputs.append(output)
     return torch.cat(outputs)
 
@@ -143,15 +160,3 @@ def run_training(
                 print(f"Early stopping activated after {epoch} epochs")
                 break
     return best_model_state, train_logs
-
-
-def run_prediction(
-        model: torch.nn.Module, data_loader: data.DataLoader
-) -> torch.Tensor:
-    model.train(False)
-    outputs = []
-    with torch.no_grad():
-        for input in data_loader:
-            output = model(input)
-            outputs.append(output)
-    return torch.cat(outputs)

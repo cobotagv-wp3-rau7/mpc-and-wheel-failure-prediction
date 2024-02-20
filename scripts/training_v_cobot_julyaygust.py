@@ -8,7 +8,7 @@ import torch
 from torch import nn, optim
 from torch.utils import data
 
-from cobot_ml.data.utilities import DsMode, prepare_dataset
+from cobot_ml.data.utilities import DsMode
 from cobot_ml.utilities import dumps_file
 
 sys.path.append(os.getcwd())
@@ -101,9 +101,9 @@ def process(
 
     print(experiment_subfolder_path)
 
-    _, _, channel = DatasetInputData.create(dataset_name).channel(channel_name)
+    the_dataset = DatasetInputData.create(dataset_name)
     #################################################################################
-    train_dataset = prepare_dataset(channel, input_length, forecast_length, DsMode.WITHOUT_MPC)
+    train_dataset = the_dataset.prepare_dataset(channel_name, input_length, forecast_length)
 
     valid_samples_count = int(len(train_dataset) * valid_set_size)
     train_subset, valid_subset = data.random_split(
@@ -148,7 +148,7 @@ def process(
 
 
 def cobot_2023julyaugust():
-    for input_length in [10]:#, 20, 50, 100]:
+    for input_length in [10, 20]:#, 50, 100]:
         for dataset, subset in [
             (Datasets.CoBot20230708, ["train"]),
         ]:
@@ -185,7 +185,7 @@ if __name__ == "__main__":
     threads = []
 
     to_be_processed = list(cobot_2023julyaugust())
-    base = "c:\\experiments\\cobot_2023_julyaugust_prediction_wheel_diameter__wo_wheel_diameter_2\\"
+    base = "c:\\experiments\\cobot_2023_julyaugust_prediction_wheel_diameter__wo_wheel_diameter_better_train_test_split\\"
 
     for input_length, forecast_length, dataset_name, subset, model_fun, params in to_be_processed:
         dataset = DatasetInputData.create(dataset_name)
