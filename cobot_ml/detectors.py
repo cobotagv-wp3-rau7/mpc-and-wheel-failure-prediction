@@ -11,7 +11,7 @@ from torch.utils import data
 from cobot_ml import decorators
 from cobot_ml.data import patchers
 from cobot_ml.observer import Observable
-from cobot_ml.training.runners import run_prediction
+from cobot_ml.training.runners import run_inference
 
 
 class BaseDetector(abc.ABC, Observable):

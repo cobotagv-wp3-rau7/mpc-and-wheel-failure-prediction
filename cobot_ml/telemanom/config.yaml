@@ -1,0 +1,20 @@
+# Runtime params
+#===================================
+
+# number of values to evaluate in each batch
+batch_size: 70
+
+# number of trailing batches to use in error calculation
+window_size: 30
+
+# determines window size used in EWMA smoothing (percentage of total values for channel)
+smoothing_perc: 0.05
+
+# number of values surrounding an error that are brought into the sequence (promotes grouping on nearby sequences
+error_buffer: 100
+
+# num previous timesteps provided to model to predict future values
+l_s: 50
+
+# minimum percent decrease between max errors in anomalous sequences (used for pruning)
+p: 0.13

@@ -1,0 +1,90 @@
+from typing import List, Callable
+
+import joblib
+import numpy as np
+
+
+class Preprocessor:
+    def __init__(self, preprocessing_path):
+        self.scaler = joblib.load(preprocessing_path)
+
+    def preprocessing(self, input_data):
+        B, H, F = input_data.shape
+        reshaped = input_data.reshape(-1, F)
+        scaled_data = self.scaler.transform(reshaped)
+        scaled_data = scaled_data.reshape(B, H, F)
+        return scaled_data
+
+
+class ClassifierStepByStepPredictor:
+
+    def __init__(self,
+                 model_file: str,
+                 columns: List[str],
+                 preprocessing: Callable[[np.ndarray], np.ndarray],
+                 ):
+        self.model = joblib.load(model_file)
+        self.columns = columns
+        self.preprocessing = preprocessing
+        self.feature_count = len(columns)
+
+        print(f"Model loaded from {model_file}.")
+        print(f"Feature count: {self.feature_count}.")
+
+    def get_columns(self):
+        """
+        Intended for calling code to validate and / or adjust list of features passed to step()
+        """
+        return self.columns
+
+    def step(self, input_data: np.ndarray) -> np.ndarray:
+        """
+        input_data should be a 3D array [B, 1, F], where:
+          B is for batching (can be 1)
+          F stands for features.
+
+        returns an array of size [B,] where B is same as in input_data
+        """
+        assert len(input_data.shape) == 3, "Input data should be a 2D array [B, H, F]."
+        N, D, F = input_data.shape
+        assert F == self.feature_count, f"Expected {self.feature_count} features, got {F}."
+        assert D == 1, f"No history expected here, got {D} elements of history."
+
+        preprocessed_data = self.preprocessing(input_data)
+        output = self.model.predict(preprocessed_data.reshape(N, F))
+        return output
+
+
+#####################################################
+#####################################################
+#####################################################
+#####################################################
+#####################################################
+
+# Ten model wskazuje, czy z kołami dzieje się cos złego.
+# Wynik zwracany przez ClassifierStepByStepPredictor.step() to ciąg liczb {0, 1},
+# gdzie 0 oznacza brak anomalii, a 1 anomalię.
+# UWagi:
+# - Dane dla zgodności mają 3 wymiary.
+# - Bez historii - tylko bieżace dane (2. wymiar zawsze 1).
+# - Powinno to operowac na danych z lipca-sierpnia 2023.
+#####################################################
+#####################################################
+#####################################################
+#####################################################
+
+selected_columns = [
+    'FH.6000.[NNS] - Natural Navigation Signals.Difference heading average correction',
+    'FH.6000.[NNS] - Natural Navigation Signals.Distance average correction',
+]
+
+preprocessing_path = './20240310_wheel_problems_july_august_2023.scaler.dump'
+model_file_path = "./20240310_wheel_problems_july_august_2023.RF.dump"
+
+preprocessor = Preprocessor(preprocessing_path)
+preprocessing = preprocessor.preprocessing
+
+model_wrapper = ClassifierStepByStepPredictor(model_file_path, selected_columns, preprocessing)
+
+output_data = model_wrapper.step(np.random.rand(10, 1, 2))
+print("Finished")
